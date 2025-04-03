@@ -14,7 +14,7 @@ else:
 
 class ClientError(RuntimeError):
     pass
-def get_content(query, base_url, model_name):
+def get_content(query, base_url, model_name, format="text"):
     API_KEY = os.environ.get("OPENAI_API_KEY", "EMPTY")
     API_REQUEST_TIMEOUT = int(os.getenv('OPENAI_API_REQUEST_TIMEOUT', '99999'))
     if IS_OPENAI_V1:
@@ -26,7 +26,14 @@ def get_content(query, base_url, model_name):
         )
     else:
         client = None
-    messages = [{'role': 'user', 'content': query}]
+    
+    if format == "text":
+        messages = [{'role': 'user', 'content': query}]
+    elif format == "messages":
+        messages = query
+    else:
+        raise ValueError("format must be either 'text' or 'messages'")
+        
     call_args = dict(
             model=model_name,
             messages=messages,
@@ -76,11 +83,21 @@ def get_content(query, base_url, model_name):
     return result
 
 if __name__ == "__main__":
-    conversation_history = []
+    # Example using text format
+    print("Example using format='text':")
     user_input = "Hello!"
     res = get_content(user_input, "http://10.77.249.36:8030/v1", "Qwen/QwQ")
     print(f"Response: {res}")
 
     user_input = "How are you?"
     res = get_content(user_input, "http://10.77.249.36:8030/v1", "Qwen/QwQ")
+    print(f"Response: {res}")
+    
+    # Example using messages format
+    print("\nExample using format='messages':")
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Tell me about quantum computing."}
+    ]
+    res = get_content(messages, "http://10.77.249.36:8030/v1", "Qwen/QwQ", format="messages")
     print(f"Response: {res}")

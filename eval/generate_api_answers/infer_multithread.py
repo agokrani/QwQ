@@ -25,10 +25,10 @@ def count_completed_samples(output_file):
                     continue
     return prompt_counts
 
-def process_item(item, output_file, base_url, model_name):
+def process_item(item, output_file, base_url, model_name, format="messages"):
     result = copy.deepcopy(item)
 
-    response = get_content(item['prompt'], base_url, model_name)
+    response = get_content(item['prompt'], base_url, model_name, format=format)
 
     if 'gen' not in result:
         result['gen'] = []
@@ -49,6 +49,7 @@ def main():
     parser.add_argument("--max_workers", type=int, default=128, help="Maximum number of worker threads")
     parser.add_argument("--base_url", type=str, default='http://10.77.249.36:8030/v1', help="base url of vllm server")
     parser.add_argument("--model_name", type=str, default='Qwen/QwQ-32B', help="model name of vllm server")
+    parser.add_argument("--format", type=str, default='messages', choices=['text', 'messages'], help="Format of prompt: 'text' for string prompt, 'messages' for message list")
     args = parser.parse_args()
 
     with open(args.input_file, 'r', encoding='utf-8') as f:
@@ -76,7 +77,7 @@ def main():
     completed_count = 0
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers) as executor:
-        future_to_item = {executor.submit(process_item, item, args.output_file, args.base_url, args.model_name): i 
+        future_to_item = {executor.submit(process_item, item, args.output_file, args.base_url, args.model_name, args.format): i 
                           for i, item in enumerate(expanded_data)}
         
         with tqdm(total=len(expanded_data), desc="Processing samples") as pbar:
