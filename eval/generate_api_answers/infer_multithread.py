@@ -6,10 +6,19 @@ import concurrent.futures
 import threading
 import os
 import collections
+import hashlib
 
 from utils_vllm import get_content
 
 file_lock = threading.Lock()
+
+def get_prompt_key(prompt):
+    """Convert prompt to a hashable key - convert list to string if needed"""
+    if isinstance(prompt, list):
+        # Create a hash of the serialized prompt for use as a key
+        prompt_str = json.dumps(prompt, sort_keys=True)
+        return hashlib.md5(prompt_str.encode()).hexdigest()
+    return prompt
 
 def count_completed_samples(output_file):
     prompt_counts = collections.defaultdict(int)
@@ -19,16 +28,17 @@ def count_completed_samples(output_file):
                 try:
                     item = json.loads(line)
                     prompt = item['prompt']
+                    prompt_key = get_prompt_key(prompt)
                     gen_count = len(item.get('gen', []))
-                    prompt_counts[prompt] += gen_count
+                    prompt_counts[prompt_key] += gen_count
                 except json.JSONDecodeError:
                     continue
     return prompt_counts
 
-def process_item(item, output_file, base_url, model_name, format="messages"):
+def process_item(item, output_file, base_url, model_name, format="messages", stop=None):
     result = copy.deepcopy(item)
 
-    response = get_content(item['prompt'], base_url, model_name, format=format)
+    response = get_content(item['prompt'], base_url, model_name, format=format, stop=stop)
 
     if 'gen' not in result:
         result['gen'] = []
@@ -50,6 +60,7 @@ def main():
     parser.add_argument("--base_url", type=str, default='http://10.77.249.36:8030/v1', help="base url of vllm server")
     parser.add_argument("--model_name", type=str, default='Qwen/QwQ-32B', help="model name of vllm server")
     parser.add_argument("--format", type=str, default='messages', choices=['text', 'messages'], help="Format of prompt: 'text' for string prompt, 'messages' for message list")
+    parser.add_argument("--stop", type=str, nargs="+", default=None, help="List of stop tokens")
     args = parser.parse_args()
 
     with open(args.input_file, 'r', encoding='utf-8') as f:
@@ -66,7 +77,8 @@ def main():
     expanded_data = []
     for item in data:
         prompt = item['prompt']
-        completed = completed_counts.get(prompt, 0)
+        prompt_key = get_prompt_key(prompt)
+        completed = completed_counts.get(prompt_key, 0)
         remaining = args.n_samples - completed
         for _ in range(remaining):
             expanded_data.append(copy.deepcopy(item))
@@ -77,7 +89,7 @@ def main():
     completed_count = 0
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers) as executor:
-        future_to_item = {executor.submit(process_item, item, args.output_file, args.base_url, args.model_name, args.format): i 
+        future_to_item = {executor.submit(process_item, item, args.output_file, args.base_url, args.model_name, args.format, args.stop): i 
                           for i, item in enumerate(expanded_data)}
         
         with tqdm(total=len(expanded_data), desc="Processing samples") as pbar:

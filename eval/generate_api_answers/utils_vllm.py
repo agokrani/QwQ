@@ -14,7 +14,7 @@ else:
 
 class ClientError(RuntimeError):
     pass
-def get_content(query, base_url, model_name, format="text"):
+def get_content(query, base_url, model_name, format="text", stop=None):
     API_KEY = os.environ.get("OPENAI_API_KEY", "EMPTY")
     API_REQUEST_TIMEOUT = int(os.getenv('OPENAI_API_REQUEST_TIMEOUT', '99999'))
     if IS_OPENAI_V1:
@@ -40,6 +40,7 @@ def get_content(query, base_url, model_name, format="text"):
             temperature=0.6,
             top_p=0.95,
             max_tokens=32768,
+            stop=stop
         )
     if IS_OPENAI_V1:
             call_args['extra_body'] = {}
